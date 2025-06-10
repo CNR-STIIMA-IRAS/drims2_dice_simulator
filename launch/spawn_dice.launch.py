@@ -12,7 +12,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'dice_size',
-            default_value='0.02',
+            default_value='0.05',
             description='Length of the dice edge (in meters)'
         ),
         DeclareLaunchArgument(

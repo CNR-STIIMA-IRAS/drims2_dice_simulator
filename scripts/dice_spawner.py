@@ -15,7 +15,7 @@ from moveit_msgs.msg import PlanningScene, CollisionObject
 from shape_msgs.msg import Mesh, MeshTriangle
 
 from ament_index_python.packages import get_package_share_directory
-
+from std_msgs.msg import Int16
 
 class DiceSpawner(Node):
     def __init__(self):
@@ -51,9 +51,16 @@ class DiceSpawner(Node):
         while not self.scene_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('Waiting for /apply_planning_scene service...')
 
+        # Dice face publisher
+        self.dice_face_publisher_ = self.create_publisher(Int16, '/dice_face', 10)
+
         # Publish transforms and spawn dice
         self.publish_static_transforms()
         self.spawn_dice_with_mesh()
+
+        dice_face_msg = Int16()
+        dice_face_msg.data = self.face
+        self.dice_face_publisher_.publish(dice_face_msg)
 
     def publish_static_transforms(self):
         # --- Base TF (position only) ---
