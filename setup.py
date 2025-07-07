@@ -13,7 +13,6 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob.glob('launch/*', recursive=True)),
-        ('share/' + package_name + '/scripts', glob.glob('scripts/*', recursive=True)),
         ('share/' + package_name + '/urdf', glob.glob('urdf/*', recursive=True)),
         ('share/' + package_name + '/srv', glob.glob('srv/*.srv', recursive=True)),
     ],
@@ -26,7 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'dice_spawner = scripts.dice_spawner:main'
+            'dice_spawner = drims2_dice_simulator.dice_spawner:main'
         ],
     },
 )
