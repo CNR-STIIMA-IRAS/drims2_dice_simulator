@@ -82,9 +82,8 @@ class DiceSpawner(Node):
         self.dice_face_publisher_.publish(Int16(data=self.face))
 
     def get_dice_state_callback(self, request, response):
+        self.get_logger().info("--------------------------------")
         self.get_logger().info("Received get_dice_state request")
-        self.get_logger().info(f"self.position: {self.position}")
-        self.get_logger().info(f"self.position type: {type(self.position)}")
 
         try:
             now = rclpy.time.Time()
@@ -136,6 +135,17 @@ class DiceSpawner(Node):
             self.face = best_face
             self.dice_face_publisher_.publish(Int16(data=self.face))
             self.position = pose_msg.pose.position
+
+            self.get_logger().info(f"Face up: {response.face_number}")
+            position = pose_msg.pose.position
+            orientation = pose_msg.pose.orientation
+
+            self.get_logger().info(
+                f"Pose:\n"
+                f"  Position -> x: {position.x:.6f}, y: {position.y:.6f}, z: {position.z:.6f}\n"
+                f"  Orientation (quaternion) -> x: {orientation.x:.6f}, y: {orientation.y:.6f}, "
+                f"z: {orientation.z:.6f}, w: {orientation.w:.6f}"
+            )
 
             return response
 
