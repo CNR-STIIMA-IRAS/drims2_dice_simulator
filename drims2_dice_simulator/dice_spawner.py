@@ -62,7 +62,7 @@ class DiceSpawner(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Service to get dice state
-        self.srv = self.create_service(DiceIdentification, '/get_dice_state', self.get_dice_state_callback)
+        self.srv = self.create_service(DiceIdentification, '/dice_identification', self.get_dice_state_callback)
 
         # Define local face normals in dice_rotated_tf frame
         self.face_normals = {
