@@ -77,6 +77,7 @@ class DiceSpawner(Node):
     def spawn_dice_with_mesh_once(self):
         self.spawn_dice_with_mesh()
         self.spawn_timer.cancel()  # one-shot: stop timer
+        self.get_logger().info("Dice mesh spawned with size: {}".format(self.dice_size))
 
     def publish_base_tf(self):
         tf = TransformStamped()
@@ -137,30 +138,65 @@ class DiceSpawner(Node):
         transforms.append(tf)
 
         self.tf_broadcaster.sendTransform(transforms)
+        self.get_logger().info(f"Published transforms for dice face {self.face}")
+
+    def dice_spawned(self, future):
+        try:
+            response = future.result()
+            if response.error_code.val == response.error_code.SUCCESS:
+                self.get_logger().info(f"Dice spawned successfully with face {self.face}")
+            else:
+                self.get_logger().error(f"Failed to spawn dice: {response.error_code.val}")
+        except Exception as e:
+            self.get_logger().error(f'An error occurred while spawning: {str(e)}')
+
+    def send_tf(self, future):
+        try:
+            response = future.result()
+            scene = response.scene
+            for obj in scene.world.collision_objects:
+                if obj.id == self.dice_name and obj.mesh_poses:
+                    pose = obj.mesh_poses[0]
+                    tf = TransformStamped()
+                    tf.header.stamp = self.get_clock().now().to_msg()
+                    tf.header.frame_id = "dice_base_tf"
+                    tf.child_frame_id = "dice_rotated_tf"
+                    tf.transform.translation = pose.position
+                    tf.transform.rotation = pose.orientation
+                    self.tf_broadcaster.sendTransform([tf])
+                    break
+        except Exception as e:
+            self.get_logger().error(f'An error occurred while deleting: {str(e)}')
+
+        self.get_logger().info(f"update_dice_tf_from_scene")
 
     def update_dice_tf_from_scene(self):
         req = GetPlanningScene.Request()
         req.components.components = PlanningSceneComponents.WORLD_OBJECT_NAMES
 
         future = self.get_scene_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+        future.add_done_callback(self.send_tf)
+        # rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
 
-        if not future.result():
-            self.get_logger().warn("No result from /get_planning_scene")
-            return
+        # if not future.result():
+        #     self.get_logger().warn("No result from /get_planning_scene")
+        #     return
 
-        scene = future.result().scene
-        for obj in scene.world.collision_objects:
-            if obj.id == self.dice_name and obj.mesh_poses:
-                pose = obj.mesh_poses[0]
-                tf = TransformStamped()
-                tf.header.stamp = self.get_clock().now().to_msg()
-                tf.header.frame_id = "dice_base_tf"
-                tf.child_frame_id = "dice_rotated_tf"
-                tf.transform.translation = pose.position
-                tf.transform.rotation = pose.orientation
-                self.tf_broadcaster.sendTransform([tf])
-                break
+        # scene = future.result().scene
+        # for obj in scene.world.collision_objects:
+        #     if obj.id == self.dice_name and obj.mesh_poses:
+        #         pose = obj.mesh_poses[0]
+        #         tf = TransformStamped()
+        #         tf.header.stamp = self.get_clock().now().to_msg()
+        #         tf.header.frame_id = "dice_base_tf"
+        #         tf.child_frame_id = "dice_rotated_tf"
+        #         tf.transform.translation = pose.position
+        #         tf.transform.rotation = pose.orientation
+        #         self.tf_broadcaster.sendTransform([tf])
+        #         break
+
+        self.get_logger().info(f"update_dice_tf_from_scene")
+
 
     def spawn_dice_with_mesh(self):
         # Wait for 'dice_rotated_tf' to become available in the TF tree
@@ -206,7 +242,8 @@ class DiceSpawner(Node):
 
         req = ApplyPlanningScene.Request(scene=scene)
         future = self.scene_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future)
+        future.add_done_callback(self.dice_spawned)
+        # rclpy.spin_until_future_complete(self, future)
 
     def get_dice_state_callback(self, request, response):
         try:
