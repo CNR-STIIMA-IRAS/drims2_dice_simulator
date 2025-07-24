@@ -18,7 +18,7 @@ from moveit_msgs.msg import PlanningScene, CollisionObject
 from shape_msgs.msg import SolidPrimitive
 from std_msgs.msg import Int16
 
-from drims2_msgs.srv import DiceIdentification
+from drims2_msgs.srv import DiceIdentification, AttachObject
 
 class DiceSpawner(Node):
     def __init__(self):
@@ -63,7 +63,13 @@ class DiceSpawner(Node):
         
         while not self.scene_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('Waiting for /apply_planning_scene service...')
-        
+
+        # Workaround to wait the cell to be ready, so the scene is updated
+        self.attach_client = self.create_client(AttachObject, '/attach_object')
+
+        while not self.attach_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info("Waiting the robotic cell to be ready...")
+
         self.latest_scene = None
 
         self.face_normals = {
@@ -84,6 +90,7 @@ class DiceSpawner(Node):
         self.publish_all_static_transforms()
         time.sleep(0.5)
         self.spawn_dice_with_mesh()
+        time.sleep(0.5)
 
         self.dice_face_publisher_.publish(Int16(data=self.face))
 
@@ -263,6 +270,8 @@ class DiceSpawner(Node):
                 self.get_logger().warn("Failed to update dice transform from planning scene.")
                 response.success = False
                 return response
+
+            time.sleep(0.5)  # Allow time for transforms to update
 
             now = rclpy.time.Time()
             z_world = np.array([0, 0, 1])
