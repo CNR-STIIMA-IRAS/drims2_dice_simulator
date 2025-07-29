@@ -14,13 +14,12 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import Pose, PoseStamped, TransformStamped, Point, Vector3
 from tf2_ros import StaticTransformBroadcaster, Buffer, TransformListener
 from tf_transformations import quaternion_from_euler, quaternion_multiply
-from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
+from moveit_msgs.srv import ApplyPlanningScene
 from moveit_msgs.msg import PlanningScene, CollisionObject
-from shape_msgs.msg import Mesh, MeshTriangle
+from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 from std_msgs.msg import Int16
 
 from drims2_msgs.srv import DiceIdentification, AttachObject
-
 
 class DiceSpawner(Node):
     def __init__(self):
@@ -42,12 +41,8 @@ class DiceSpawner(Node):
         package_path = get_package_share_directory('drims2_dice_simulator')
         self.dice_mesh_path = os.path.join(package_path, 'urdf', 'Die-OBJ.obj')
 
-        self.internal_node = Node('dice_spawner_internal_node')
-        self.internal_executor = MultiThreadedExecutor(num_threads=4)
-        self.internal_executor.add_node(self.internal_node)
-
+        self.scene_callback_group = ReentrantCallbackGroup()
         self.service_callback_group = ReentrantCallbackGroup()
-        self.get_scene_callback_group = ReentrantCallbackGroup()
 
         self.srv = self.create_service(
             DiceIdentification,
@@ -56,23 +51,27 @@ class DiceSpawner(Node):
             callback_group=self.service_callback_group
         )
 
-        self.dice_face_publisher_ = self.create_publisher(Int16, '/dice_face', 10)
+        self.scene_subscriber = self.create_subscription(
+            PlanningScene,
+            '/monitored_planning_scene',
+            self.monitored_scene_callback,
+            10,
+            callback_group=self.scene_callback_group
+        )
 
+        self.dice_face_publisher_ = self.create_publisher(Int16, '/dice_face', 10)
+        
         self.scene_client = self.create_client(ApplyPlanningScene, '/apply_planning_scene')
         while not self.scene_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('Waiting for /apply_planning_scene service...')
 
-        self.get_scene_client = self.internal_node.create_client(
-            GetPlanningScene,
-            '/get_planning_scene',
-            callback_group=self.get_scene_callback_group
-        )
-        while not self.get_scene_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().info("Waiting for /get_planning_scene service...")
-
+        # workaround to wait for the motion server
         self.add_client = self.create_client(AttachObject, '/attach_object')
+
         while not self.add_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info("Waiting for /attach_object service...")
+
+        self.latest_scene = None
 
         self.face_normals = {
             1: np.array([0, 1, 0]),
@@ -83,14 +82,20 @@ class DiceSpawner(Node):
             6: np.array([0, -1, 0]),
         }
 
+        self.dice_spawned = False
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
         self.publish_all_static_transforms()
-        time.sleep(1.0)
+        time.sleep(5.0)
         self.spawn_dice_with_mesh()
+
         self.dice_face_publisher_.publish(Int16(data=self.face))
+
+    def monitored_scene_callback(self, msg):
+        self.latest_scene = msg
 
     def publish_all_static_transforms(self):
         transforms = []
@@ -103,11 +108,12 @@ class DiceSpawner(Node):
             x=self.position.x,
             y=self.position.y,
             z=self.position.z
-        )
+            )
         tf_base.transform.rotation.x = 0.0
         tf_base.transform.rotation.y = 0.0
         tf_base.transform.rotation.z = 0.0
         tf_base.transform.rotation.w = 1.0
+        
         transforms.append(tf_base)
 
         q = self.get_orientation_for_face(self.face)
@@ -156,40 +162,35 @@ class DiceSpawner(Node):
         self.static_tf_broadcaster.sendTransform(transforms)
 
     def update_dice_tf_from_scene(self):
-        try:
-            request = GetPlanningScene.Request()
-            request.components.components = (
-                GetPlanningScene.Request().components.SCENE_SETTINGS |
-                GetPlanningScene.Request().components.WORLD_OBJECT_NAMES |
-                GetPlanningScene.Request().components.WORLD_OBJECT_GEOMETRY |
-                GetPlanningScene.Request().components.ROBOT_STATE_ATTACHED_OBJECTS
-            )
+        timeout_sec = 10.0
+        poll_interval = 0.05
+        start_time = time.time()
 
-            future = self.get_scene_client.call_async(request)
-            self.internal_executor.spin_until_future_complete(future, timeout_sec=5.0)
+        while time.time() - start_time < timeout_sec:
+            current_scene = self.latest_scene
+            if current_scene is None:
+                time.sleep(poll_interval)
+                continue
 
-            if not future.done():
-                self.get_logger().warn("Timeout while waiting for planning scene.")
+            try:
+                for obj in current_scene.world.collision_objects:
+                    if obj.id == self.dice_name:
+                        self.publish_updated_dice_rotated_tf(obj.pose, obj.header.frame_id)
+                        return True
+
+                for attached_obj in current_scene.robot_state.attached_collision_objects:
+                    if attached_obj.object.id == self.dice_name:
+                        self.publish_updated_dice_rotated_tf(attached_obj.object.pose, attached_obj.object.header.frame_id)
+                        return True
+
+            except Exception as e:
+                self.get_logger().error(f'Error in update_dice_tf_from_scene: {str(e)}')
                 return False
 
-            result = future.result()
+            time.sleep(poll_interval)
 
-            for obj in result.scene.world.collision_objects:
-                if obj.id == self.dice_name:
-                    self.publish_updated_dice_rotated_tf(obj.pose, obj.header.frame_id)
-                    return True
-
-            for attached_obj in result.scene.robot_state.attached_collision_objects:
-                if attached_obj.object.id == self.dice_name:
-                    self.publish_updated_dice_rotated_tf(attached_obj.object.pose, attached_obj.object.header.frame_id)
-                    return True
-
-            self.get_logger().warn(f"Dice object '{self.dice_name}' not found in planning scene.")
-            return False
-
-        except Exception as e:
-            self.get_logger().error(f'Error in update_dice_tf_from_scene: {str(e)}')
-            return False
+        self.get_logger().warn(f"Timeout: Dice object '{self.dice_name}' not found in scene after {timeout_sec} seconds.")
+        return False
 
     def publish_updated_dice_rotated_tf(self, pose: Pose, parent_frame: str):
         transforms = []
@@ -227,8 +228,18 @@ class DiceSpawner(Node):
     def spawn_dice_with_mesh(self):
         pose = PoseStamped()
         pose.header.frame_id = "dice_rotated_tf"
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x = 0.0
+        pose.pose.position.y = 0.0
+        pose.pose.position.z = 0.0
         pose.pose.orientation.w = 1.0
 
+        # Prepare pose relative to 'dice_rotated_tf'
+        pose = PoseStamped()
+        pose.header.frame_id = "dice_rotated_tf"
+        pose.pose.orientation.w = 1.0
+
+        # Load and scale mesh
         mesh = trimesh.load(self.dice_mesh_path, force='mesh')
         mesh_msg = Mesh()
         for tri in mesh.faces:
@@ -238,12 +249,18 @@ class DiceSpawner(Node):
             point.x, point.y, point.z = v * self.dice_size
             mesh_msg.vertices.append(point)
 
+        # Create collision object
         obj = CollisionObject()
         obj.id = self.dice_name
         obj.header = pose.header
         obj.meshes = [mesh_msg]
         obj.mesh_poses = [pose.pose]
         obj.operation = CollisionObject.ADD
+
+        # Apply to planning scene
+        # req = AddObject.Request(object=obj)
+        # future = self.add_client.call_async(req)
+        # future.add_done_callback(self.spawn_dice_result) 
 
         scene = PlanningScene()
         scene.world.collision_objects = [obj]
@@ -259,6 +276,7 @@ class DiceSpawner(Node):
         try:
             response = future.result()
             self.get_logger().info(f"AddObject response: {response}")
+            self.dice_spawned = response.success
         except Exception as e:
             self.get_logger().error(f'Error while spawning dice: {str(e)}')
 
@@ -271,7 +289,7 @@ class DiceSpawner(Node):
                 response.success = False
                 return response
 
-            time.sleep(0.5)
+            time.sleep(0.5)  # Allow time for transforms to update
 
             now = rclpy.time.Time()
             z_world = np.array([0, 0, 1])
@@ -303,6 +321,7 @@ class DiceSpawner(Node):
             )
             pose.pose.orientation = best_tf.transform.rotation
 
+            # Log detailed pose and face
             self.get_logger().info(f"Detected face up: {best_face}")
             self.get_logger().info(f"Position: x={pose.pose.position.x:.3f}, y={pose.pose.position.y:.3f}, z={pose.pose.position.z:.3f}")
             self.get_logger().info(f"Orientation (quaternion): x={pose.pose.orientation.x:.3f}, y={pose.pose.orientation.y:.3f}, z={pose.pose.orientation.z:.3f}, w={pose.pose.orientation.w:.3f}")
@@ -329,6 +348,7 @@ class DiceSpawner(Node):
             self.get_logger().error(f"get_dice_state_callback error: {e}")
             response.success = False
             return response
+
 
     def get_orientation_for_face(self, face):
         face_to_rpy = {
