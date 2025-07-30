@@ -58,8 +58,8 @@ class DiceSpawner(Node):
 
         self.dice_face_publisher_ = self.create_publisher(Int16, '/dice_face', 10)
 
-        self.scene_client = self.create_client(ApplyPlanningScene, '/apply_planning_scene')
-        while not self.scene_client.wait_for_service(timeout_sec=2.0):
+        self.apply_scene_client = self.create_client(ApplyPlanningScene, '/apply_planning_scene')
+        while not self.apply_scene_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('Waiting for /apply_planning_scene service...')
 
         self.get_scene_client = self.internal_node.create_client(
@@ -250,7 +250,7 @@ class DiceSpawner(Node):
         scene.is_diff = True
 
         req = ApplyPlanningScene.Request(scene=scene)
-        future = self.scene_client.call_async(req)
+        future = self.apply_scene_client.call_async(req)
         future.add_done_callback(self.spawn_dice_result)
 
         self.get_logger().info(f"Spawned dice with:\n - face {self.face} up \n - position [{self.position.x}, {self.position.y}, {self.position.z}] \n - size {self.dice_size}")
@@ -362,7 +362,6 @@ class DiceSpawner(Node):
         q_conj = (-q[0], -q[1], -q[2], q[3])
         result = quaternion_multiply(quaternion_multiply(q, v_q), q_conj)
         return result[:3]
-
 
 def main(args=None):
     rclpy.init(args=args)
