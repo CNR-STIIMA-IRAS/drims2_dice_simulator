@@ -87,6 +87,15 @@ class DiceSpawner(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
+        try:
+            # Dummy lookup to check if "world" exists (even self -> self transform)
+            self.tf_buffer.lookup_transform("world", "world", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
+            self.get_logger().info("TF frame 'world' found.")
+            self.world = "world"
+        except Exception:
+            self.get_logger().warn("TF frame 'world' not found. Falling back to 'base_footprint'.")
+            self.world = "base_footprint"
+
         self.publish_all_static_transforms()
         time.sleep(1.0)
         self.spawn_dice_with_mesh()
@@ -97,7 +106,7 @@ class DiceSpawner(Node):
 
         tf_base = TransformStamped()
         tf_base.header.stamp = self.get_clock().now().to_msg()
-        tf_base.header.frame_id = "world"
+        tf_base.header.frame_id = self.world
         tf_base.child_frame_id = "dice_base_tf"
         tf_base.transform.translation = Vector3(
             x=self.position.x,
