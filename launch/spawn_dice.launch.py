@@ -17,7 +17,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'position',
-            default_value='[0.0, 0.0, 0.85]',
+            default_value='[-0.1, 0.0, 0.85]',
             description='Initial dice position [x, y, z]'
         ),
 
