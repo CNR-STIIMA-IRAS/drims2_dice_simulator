@@ -89,11 +89,11 @@ class DiceSpawner(Node):
 
         try:
             # Dummy lookup to check if "world" exists (even self -> self transform)
-            self.tf_buffer.lookup_transform("world", "world", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
+            self.tf_buffer.lookup_transform("base_link", "world", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
             self.get_logger().info("TF frame 'world' found.")
             self.world = "world"
         except Exception:
-            self.get_logger().warn("TF frame 'world' not found. Falling back to 'base_footprint'.")
+            self.get_logger().info("TF frame 'world' not found. Falling back to 'base_footprint'.")
             self.world = "base_footprint"
 
         self.publish_all_static_transforms()
@@ -289,7 +289,7 @@ class DiceSpawner(Node):
             best_tf = None
 
             for face_id in range(1, 7):
-                tf = self.tf_buffer.lookup_transform('world', f'face{face_id}_tf', now)
+                tf = self.tf_buffer.lookup_transform(self.world, f'face{face_id}_tf', now)
                 q = tf.transform.rotation
                 q_np = np.array([q.x, q.y, q.z, q.w])
                 z_local = np.array([0, 0, 1])
