@@ -40,7 +40,7 @@ class DiceSpawner(Node):
         self.position = Point(x=pos_param[0], y=pos_param[1], z=pos_param[2])
 
         package_path = get_package_share_directory('drims2_dice_simulator')
-        self.dice_mesh_path = os.path.join(package_path, 'urdf', 'Die-OBJ.obj')
+        self.dice_mesh_path = os.path.join(package_path, 'urdf', 'simplify_Die-OBJ.obj')
 
         self.internal_node = Node('dice_spawner_internal_node')
         self.internal_executor = MultiThreadedExecutor(num_threads=4)
@@ -89,7 +89,7 @@ class DiceSpawner(Node):
 
         try:
             # Dummy lookup to check if "world" exists (even self -> self transform)
-            self.tf_buffer.lookup_transform("base_link", "world", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
+            self.tf_buffer.lookup_transform("world", "world", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
             self.get_logger().info("TF frame 'world' found.")
             self.world = "world"
         except Exception:
@@ -236,6 +236,7 @@ class DiceSpawner(Node):
     def spawn_dice_with_mesh(self):
         pose = PoseStamped()
         pose.header.frame_id = "dice_rotated_tf"
+        pose.pose.position.y -= 0.004
         pose.pose.orientation.w = 1.0
 
         mesh = trimesh.load(self.dice_mesh_path, force='mesh')
