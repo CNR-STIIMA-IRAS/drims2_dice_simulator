@@ -91,8 +91,10 @@ class DiceSpawner(Node):
         self.get_group_name()
 
         if self.group_name == "manipulator":
+            self.get_logger().info("Using 'world' as world frame.")
             self.world = "world"
         else:
+            self.get_logger().info("Using 'world' as world frame.")
             self.world = "base_footprint"
 
         self.publish_all_static_transforms()
@@ -112,7 +114,7 @@ class DiceSpawner(Node):
         param_request.names = ['move_group_name']
 
         future = param_client.call_async(param_request)
-        rclpy.spin_until_future_complete(self.internal_node, future)
+        self.internal_executor.spin_until_future_complete(future, timeout_sec=5.0)
 
         if future.done() and future.result() is not None:
             values = future.result().values
