@@ -18,6 +18,7 @@ from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
 from moveit_msgs.msg import PlanningScene, CollisionObject
 from shape_msgs.msg import Mesh, MeshTriangle
 from std_msgs.msg import Int16
+from rcl_interfaces.srv import GetParameters
 
 from drims2_msgs.srv import DiceIdentification, AttachObject
 
@@ -87,19 +88,42 @@ class DiceSpawner(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
-        try:
-            # Dummy lookup to check if "world" exists (even self -> self transform)
-            self.tf_buffer.lookup_transform("world", "world", rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
-            self.get_logger().info("TF frame 'world' found.")
+        self.get_group_name()
+
+        if self.group_name == "manipulator":
             self.world = "world"
-        except Exception:
-            self.get_logger().info("TF frame 'world' not found. Falling back to 'base_footprint'.")
+        else:
             self.world = "base_footprint"
 
         self.publish_all_static_transforms()
         time.sleep(1.0)
         self.spawn_dice_with_mesh()
         self.dice_face_publisher_.publish(Int16(data=self.face))
+
+    def get_group_name(self):
+        # Retrieve 'group_name' from /motion_server_node
+
+        self.group_name = None
+        param_client = self.internal_node.create_client(GetParameters, '/motion_server_node/get_parameters')
+        while not param_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info("Waiting for /motion_server_node/get_parameters service...")
+
+        param_request = GetParameters.Request()
+        param_request.names = ['move_group_name']
+
+        future = param_client.call_async(param_request)
+        rclpy.spin_until_future_complete(self.internal_node, future)
+
+        if future.done() and future.result() is not None:
+            values = future.result().values
+            if values and values[0].string_value:
+                self.group_name = values[0].string_value
+                self.get_logger().info(f"Retrieved group_name: {self.group_name}")
+            else:
+                self.get_logger().warn("Parameter 'group_name' is empty or not set.")
+                self.group_name = "default_group"
+        else:
+            raise RuntimeError("Failed to get 'group_name' from /motion_server_node. Using default.")
 
     def publish_all_static_transforms(self):
         transforms = []
