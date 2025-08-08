@@ -94,7 +94,7 @@ class DiceSpawner(Node):
             self.get_logger().info("Using 'world' as world frame.")
             self.world = "world"
         else:
-            self.get_logger().info("Using 'world' as world frame.")
+            self.get_logger().info("Using 'base_footprint' as world frame.")
             self.world = "base_footprint"
 
         self.publish_all_static_transforms()

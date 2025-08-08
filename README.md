@@ -1,14 +1,41 @@
 # drims2_dice_simulator
-The DRIMS2 Summer School Dice Simulator package enables spawning a dice in a robotic cell, with the option to display either a random or a specified face up. Additionally, it publishes a tf at the center of the face-up side.
 
-To launch the simulator, run the following command:
+A lightweight ROS 2 package for spawning a dice inside a robotic cell. You can choose a specific face to be up or let it be selected at random. The node also publishes a `tf` frame centered on the currently face-up side.
+
+## Launch
 
 ```bash
 ros2 launch drims2_dice_simulator spawn_dice.launch.py
 ```
 
-You can customize the behavior of the dice simulator by passing the following parameters to the launch file:
+## Parameters
 
-- `face_up`: Specifies the face of the dice that should be facing up (a value between 1 and 6). If set to 0, or if not provided, the face-up will be chosen randomly.
-- `dice_size`: The length of the dice edges in centimeters. The default size is 5 cm.
-- `position`: position of the dice with respect to `world`, default [0,0,0.85].
+- **`face_up`** *(int, 0–6, default: `0`)*  
+  Face that should point upward. Use `1`–`6` to set the face up; `0` (or unset) picks a random face.
+
+- **`dice_size`** *(float, cm, default: `5.0`)*  
+  Edge length of the dice.
+
+- **`position`** *(float[3], default: `[-0.1, 0.0, 0.85]`)*  
+  XYZ spawn position in the `world` frame.
+
+## Examples
+
+Random face, default size and position:
+```bash
+ros2 launch drims2_dice_simulator spawn_dice.launch.py
+```
+
+Fixed face (e.g., “6”) and a smaller dice:
+```bash
+ros2 launch drims2_dice_simulator spawn_dice.launch.py face_up:=6 dice_size:=2.5
+```
+
+Spawn position tuned for PAL TIAGo Pro:
+```bash
+ros2 launch drims2_dice_simulator spawn_dice.launch.py position:=[0.7, 0.0, 0.85]
+```
+
+> The provided defaults work well for UR10e and ABB YuMi workcells.
+
+**TF output:** a frame is published at the center of the upward face for easy grasp planning.
