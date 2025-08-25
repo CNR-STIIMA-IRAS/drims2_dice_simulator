@@ -13,10 +13,10 @@ ros2 launch drims2_dice_simulator spawn_dice.launch.py
 - **`face_up`** *(int, 0–6, default: `0`)*  
   Face that should point upward. Use `1`–`6` to set the face up; `0` (or unset) picks a random face.
 
-- **`dice_size`** *(float, cm, default: `5.0`)*  
+- **`dice_size`** *(float, default: `0.027`)*  
   Edge length of the dice.
 
-- **`position`** *(float[3], default: `[-0.1, 0.0, 0.85]`)*  
+- **`position`** *(float[3], default: `[0.025, 0.0, 0.80]`)*  
   XYZ spawn position in the `world` frame.
 
 ## Examples
@@ -28,7 +28,7 @@ ros2 launch drims2_dice_simulator spawn_dice.launch.py
 
 Fixed face (e.g., “6”) and a smaller dice:
 ```bash
-ros2 launch drims2_dice_simulator spawn_dice.launch.py face_up:=6 dice_size:=2.5
+ros2 launch drims2_dice_simulator spawn_dice.launch.py face_up:=6 dice_size:=0.05
 ```
 
 Spawn position tuned for PAL TIAGo Pro:
