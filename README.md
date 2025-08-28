@@ -33,7 +33,8 @@ ros2 launch drims2_dice_simulator spawn_dice.launch.py face_up:=6 dice_size:=0.0
 
 Spawn position tuned for PAL TIAGo Pro:
 ```bash
-ros2 launch drims2_dice_simulator spawn_dice.launch.py position:=[0.7, 0.0, 0.85]
+ros2 launch drims2_dice_simulator spawn_dice.launch.py position:="[0.7, 0.0, 0.85]"
+
 ```
 
 > The provided defaults work well for UR10e and ABB YuMi workcells.
